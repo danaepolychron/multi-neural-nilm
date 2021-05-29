@@ -1,0 +1,20 @@
+{
+    "experiment_id": "1",
+    "experiment_title" : "Single Building NILM",
+    "train_source" : "ukdale.h5",
+    "validation_source" : "ukdale.h5",
+    "test_source" : "ukdale.h5",
+    "train_buildings": [1],
+    "validation_buildings": [1],
+    "test_buildings": [1],
+    "train_windows": [["2013-04-12","2013-08-05"]],
+    "validation_windows": [["2013-08-06","2013-08-20"]],
+    "test_windows": [["2013-08-21","2013-09-05"]],
+    "sample_period" : 60,
+    "targets" : { 
+        "fridge": [0, 1, 50],  
+        "dish washer" : [3, 30, 10],
+        "washer dryer" : [30, 30, 20]
+    }
+
+}
