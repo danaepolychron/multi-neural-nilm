@@ -31,20 +31,6 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class Experiment(object): 
     
-    """
-    A class used to represent an experiment 
-
-    Attributes
-    ----------
-    atr : str
-        a formatted string to print out what the animal says
-
-    Methods
-    -------
-    method(sound=None)
-        Prints the animals name and what sound it makes
-    """
-    
     def __init__(self, scenario=1):
         
         super().__init__()
