@@ -2,13 +2,10 @@
     "experiment_id": "2",
     "experiment_title" : "Single Building Learning and Generalisation on Same Dataset",
     "train_source" : "ukdale.h5",
-    "validation_source" : "ukdale.h5",
     "test_source" : "ukdale.h5",
     "train_buildings": [1],
-    "validation_buildings": [2,5],
     "test_buildings": [2,5],
     "train_windows": [["2013-04-12","2013-08-05"]],
-    "validation_windows": [["2013-04-16","2013-04-23"], ["2014-06-29","2014-07-06"]],
     "test_windows": [["2013-04-24","2013-05-01"], ["2014-07-06","2014-07-13"]],
     "sample_period" : 60,
     "targets" : { 

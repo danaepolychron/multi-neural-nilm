@@ -3,7 +3,7 @@ import os
 dirname = os.path.dirname(__file__) #current directory
 
 
-NILMTK_RAW = os.path.join(dirname, "../../Datasets")
+NILMTK_SOURCE = os.path.join(dirname, "../../Datasets")
 SOURCES = os.path.join(dirname, "../data/data")
 SCENARIOS = os.path.join(dirname, "../data/scenarios")
 PRETRAINED = os.path.join(dirname, "../experiments/pretrained_models")

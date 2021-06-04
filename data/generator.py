@@ -1,4 +1,3 @@
-#need to review
 from __future__ import print_function, division
 import warnings
 
@@ -8,31 +7,56 @@ warnings.filterwarnings('ignore')
 import numpy as np
 import torch.utils.data as data
 
-
-
-
     
 class Seq2Seq(data.Dataset):
     
-    def __init__(self, data=None, length=100, train=False):
+    """
+    Defines a Dataset where each sample is a sequence of aggregate data and 
+    the label is the corresponding sequence of the appliance meters data. 
+
+    ...
+
+    Attributes
+    ----------
+    mains : pandas.Series
+        series containing the aggregate meter data  
+    meters : pandas.DataFrame
+        dataframe containing the appliance meters data 
+    length : int
+        the length of the sequence 
+    speed : int
+        the value used to limit the number of samples and minimise fitting time. Defaults to 1. (i.e no speed)
         
-        super().__init__()
+    train : boolean
+    
+    samples : int
+        the number of samples in the dataset
+    
+    """
+    
+    
+    def __init__(self, mains=None, meters=None, length=100, speed=1, train=False):
         
-        self.mains = data['site meter'] / 2000.
-        self.activations = data.drop(['site meter'], axis=1)
+        self.mains =  mains
+        self.meters = meters
+        
         self.length = length
         self.train = train
-        self.samples = len(self.mains) // self.length
+        self.speed = speed
+ 
+        self.samples = len(self.mains) // self.length*self.speed #to minimise fit time
+             
         
     def __getitem__(self, index):
         
+        # i increases by the sequence length
         i = index * self.length
         
         if self.train:      
             i = np.random.randint(0, len(self.mains) - self.length)
         
         X = self.mains.iloc[i:i+self.length].values.astype('float32')
-        y = self.activations.iloc[i:i+self.length].values.astype('float32')
+        y = self.meters.iloc[i:i+self.length].values.astype('float32')
 
         X -= X.mean()
         
@@ -42,38 +66,56 @@ class Seq2Seq(data.Dataset):
         
         return self.samples 
     
-    
-    def load(self, batch_size, shuffle):
-        
-        return data.DataLoader(dataset=self, batch_size=batch_size, shuffle=shuffle)
-        
-        
-    
 
 class Seq2Point(data.Dataset):
     
-    def __init__(self, data=None, length=100, train=False):
+    """
+    Defines a Dataset where each sample is a sequence of aggregate data 
+    and the label is the first point of the corresponding sequence of appliance meters data. 
+
+    ...
+
+    Attributes
+    ----------
+    mains : pandas.Series
+        series containing the aggregate meter data  
+    meters : pandas.DataFrame
+        dataframe containing the appliance meters data 
+    length : int
+        the length of the sequence 
+    speed : int
+        the value used to limit the number of samples and minimise fitting time. Defaults to 1. (i.e no speed)
         
-        super().__init__()
-             
-        self.mains = data['site meter'] / 2000.
-        self.activations = data.drop(['site meter'], axis=1)
+    train : boolean
+    
+    samples : int
+        the number of samples in the dataset
+    
+    """
+    
+    
+    def __init__(self, mains=None, meters=None, length=100, speed=1, train=False):
+        
+        self.mains =  mains
+        self.meters = meters
         
         self.length = length
         self.train = train
-
-
-        self.samples = len(self.mains) - self.length #needs change
+        self.speed = speed
         
+        self.samples = len(self.mains) // self.speed  #to minimise fit time
+     
+    
     def __getitem__(self, index):
         
+        # i increases by one
         i = index
         
         if self.train:      
             i = np.random.randint(0, len(self.mains) - self.length)
         
         X = self.mains.iloc[i:i+self.length].values.astype('float32')
-        y = self.activations.iloc[i].values.astype('float32')
+        y = self.meters.iloc[i].values.astype('float32')
 
         X -= X.mean()
         
@@ -83,6 +125,5 @@ class Seq2Point(data.Dataset):
         
         return self.samples 
     
-    def load(self, batch_size, shuffle):
-        
-        return data.DataLoader(dataset=self, batch_size=batch_size, shuffle=shuffle)
+    
+    

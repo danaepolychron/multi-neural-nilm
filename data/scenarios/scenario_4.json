@@ -2,13 +2,10 @@
     "experiment_id": "4",
     "experiment_title" : "Generalisation to Different Dataset",
     "train_source" : "ukdale.h5",
-    "validation_source" : "redd.h5",
     "test_source" : "redd.h5",
     "train_buildings": [1],
-    "validation_buildings": [1],
     "test_buildings": [1],
     "train_windows": [["2013-04-12","2013-08-05"]],
-    "validation_windows": [["2011-04-18","2011-05-09"]],
     "test_windows": [["2011-05-10","2011-05-24"]],
     "sample_period" : 60,
     "targets" : { 

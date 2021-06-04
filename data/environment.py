@@ -1,4 +1,3 @@
-#need to review
 from __future__ import print_function, division
 import warnings
 
@@ -14,10 +13,36 @@ from nilmtk import DataSet, MeterGroup
 from nilmtk.electric import get_activations
 from nilmtk.timeframe import TimeFrame
 
-from utils.path_finder import NILMTK_RAW, SCENARIOS
+from utils.path_finder import NILMTK_SOURCE, SCENARIOS
  
 
 class Environment(object): 
+    
+    """
+    Represents an environment to which an experiment is conducted.
+
+    ...
+
+    Attributes
+    ----------
+    scenario : int
+        the scenario that defines the environment params
+    mode : str
+        the mode of the environment i.e train or test
+    source : str
+        the source filename of the environment's dataset  
+    dataset : str
+        the name of the environment's dataset i.e UK-DALE, REDD etc.
+    buildings : list of ints
+        the list of buildings used to create the environment
+    sample_period : int
+        the sample period of the data
+        
+    meter_groups : list of nilmtk.MeterGroups
+    
+    appliances : dict 
+        the target appliances with their corresponding min-off duration, min-on duration, power threshold
+    """
     
     def __init__(self, scenario=1, mode='train'):
         
@@ -25,32 +50,46 @@ class Environment(object):
         
         self.scenario = scenario
         self.mode = mode
-        
         self.source = None
         self.dataset = None
-        self.buildings = None
+        self.buildings = []
         self.sample_period = None  
         self.metergroups = []
-        self.appliances = []
+        self.appliances = {}
         
     def configure_environment(self): 
         
+        """Configures the environment as defined in the scenario configuration file."""
+        
         filename = os.path.join(SCENARIOS,"scenario_{}.json".format(self.scenario))
+        
         with open(filename) as file:
             conf = json.load(file)
         
-        self.source = os.path.join(NILMTK_RAW,conf['{}_source'.format(self.mode)])
+        self.source = os.path.join(NILMTK_SOURCE,conf['{}_source'.format(self.mode)])
         self.dataset = DataSet(self.source).metadata['name']
         self.buildings = conf['{}_buildings'.format(self.mode)] 
         self.sample_period = conf['sample_period']
         
-        self.metergroups = self.configure_metergroups(conf, self.mode)
+        self.metergroups = self.configure_metergroups(conf)
         self.appliances = self.configure_appliances(conf)
             
         
-    def configure_metergroups(self, conf, mode):
+    def configure_metergroups(self, conf):
         
-        windows = conf['{}_windows'.format(mode)]   
+        """Configures the environment as defined in the scenario configuration file.
+        
+        Parameters
+        ----------
+        conf : dict, scenario configuration params
+
+        Returns
+        -------
+        List of nilmtk.MeterGroups, each MeterGroup corresponds to a building.
+        
+        """
+        
+        windows = conf['{}_windows'.format(self.mode)]   
         
         metergroups = [None]*len(self.buildings)
         
@@ -64,6 +103,18 @@ class Environment(object):
     
 
     def configure_appliances(self, conf):
+        
+        """Sets the min-off duration, min-on duration, power threshold for each target appliance nilmtk.ElecMeter.
+        
+        Parameters
+        ----------
+        conf : dict, scenario configuration params
+
+        Returns
+        -------
+        dict,  the target appliances with their corresponding min-off duration, min-on duration, power threshold.
+        
+        """
         
         for appliance, thresholds in conf['targets'].items():
             
@@ -84,10 +135,24 @@ class Environment(object):
         return self.appliances
             
         
-    def get_activations_chunk(self, metergroups, appliance, chunk_section):
+    def get_chunk_activations(self, metergroup, appliance, timeframe):
         
-        meter = metergroups[appliance]
-        chunk = next(meter.power_series(sections=[chunk_section]))
+        """Returns the activations of an appliance, i.e periods when the appliance is on.
+        
+        Parameters
+        ----------
+        metergroup : nilmtk.MeterGroup, contains the building meters
+        appliance : str, appliance name
+        timeframe : nilmtk.TimeFrame, the timeframe in which the function searches for the activations
+
+        Returns
+        -------
+        list of pandas.Series,  each series contains one activation.
+        
+        """
+        
+        meter = metergroup[appliance]
+        chunk = next(meter.power_series(sections=[timeframe]))
         
         activations = get_activations(chunk = chunk, 
                                       min_off_duration= meter.min_off_duration,     
@@ -98,24 +163,63 @@ class Environment(object):
         return activations
         
     
-    def align_meters(self, metergroups, appliance, chunk, chunk_section): 
-    
-        activations_chunk = self.get_activations_chunk(metergroups, appliance, chunk_section)
+    def align_mains_with_meter(self, metergroup, appliance, chunk, timeframe): 
+        
+        """Aligns the mains chunk with the activations of an appliance, for a specific timeframe. 
+        
+        This function is used to align the mains and appliance meter chunks even in-case there is 
+        a misalignment in the datetime index.
+        
+        Parameters
+        ----------
+        metergroup : nilmtk.MeterGroup, contains the building meters
+        appliance : str, appliance name
+        chunk : pandas.DataFrame
+        timeframe : nilmtk.TimeFrame, the timeframe that corresponds to the mains chunk indices
 
+        Returns
+        -------
+        pandas.Series,  a series containing the appliance meter chunk.
+        
+        """
+        
+        chunk_activations = self.get_chunk_activations(metergroup, appliance, timeframe)
+
+        # initialise the appliance as OFF 
         chunk[appliance] = 0
         
-        if activations_chunk:  
-            for i in range(len(activations_chunk)):
-                mask = (chunk.index >= activations_chunk[i].index[0]) & (chunk.index <= activations_chunk[i].index[-1])
+        if chunk_activations:  
+            
+            for i in range(len(chunk_activations)):
+             
+                # the appliance is ON for the mains indices that are inside the chunk activation
+                mask = (chunk.index >= chunk_activations[i].index[0]) & (chunk.index <= chunk_activations[i].index[-1])
                 chunk.loc[mask, appliance] = 1
 
         return chunk[appliance] 
     
+    
     def generate_single_building(self, building, i):
         
-        print("Preparing {} building {} ...".format(self.dataset, self.buildings[i])) 
+        """Generates the dataset for a single building. 
+         
+        Parameters
+        ----------
+        building : nilmtk.MeterGroup, contains the building meters
+        i : int, building index
+
+        Returns
+        -------
+        pandas.DataFrame,  a dataframe containing the aligned mains and appliance meters data.
         
+        """
+        
+        print("Preparing {} building {} {}ing set ...".format(self.dataset, self.buildings[i], self.mode)) 
+        
+
         mains = building.mains()
+        
+        # Locate the good sections (where the sample period is <= max_sample_period) of the aggregate (mains) meter 
         good_sections = mains.good_sections()
         mains = mains.power_series(sample_period=self.sample_period, sections=good_sections)
 
@@ -134,7 +238,8 @@ class Environment(object):
             chunk_timeframe = TimeFrame(chunk.index[0], chunk.index[-1])
 
             for appliance in self.appliances: 
-                chunk[appliance] = self.align_meters(building, appliance, chunk, chunk_timeframe)
+                
+                chunk[appliance] = self.align_mains_with_meter(building, appliance, chunk, chunk_timeframe)
             
             sections.append(chunk)
 
@@ -146,15 +251,27 @@ class Environment(object):
         
     
     def generate_multiple_building(self):
+        
+        """Generates the dataset for multiple building. 
 
+
+        Returns
+        -------
+        pandas.DataFrame,  a dataframe containing the aligned mains and appliance meters data.
+        
+        """
+
+        
         buildings = [None] * len(self.metergroups)
         
-        for i, single_building in enumerate(self.metergroups):
+        for i, building in enumerate(self.metergroups):
             
-            buildings[i] = self.generate_single_building(self, single_building, i)
+            buildings[i] = self.generate_single_building(building, i)
             
         
         if any(k is not None for k in buildings): 
+            
+            # buildings are concatenated serially (no shuffling). 
             
             data = pd.concat(buildings)
             return data
@@ -165,6 +282,15 @@ class Environment(object):
 
     
     def generate_environment(self):
+        
+        """Generates the environment's dataset. 
+
+
+        Returns
+        -------
+        pandas.DataFrame,  a dataframe containing the aligned mains and appliance meters data.
+        
+        """
         
         buildings = [None] * len(self.metergroups)
         
@@ -185,61 +311,73 @@ class Environment(object):
                                 
 
 
-def get_status(app, threshold, min_off, min_on):
+def get_on_off(chunk, on_power_threshold, min_off_duration=0,  min_on_duration=0):
     
-    #creates a Boolean series to check the values over the threshold
-    condition = app > threshold
-    
-    # Finds the indicies of changes in "condition" - those are True
-    d = np.diff(condition)
-    
-    # Returns the indices of the elements that are non-zero. not false in our case
-    idx, = d.nonzero() 
+    """Defines the chunk on, off states based on the on_power_threshold, min_off_duration,  min_on_duration. 
 
-    # We need to start things after the change in "condition". Therefore, 
+    Parameters
+    ----------
+    
+    chunk : numpy.array
+    on_power_threshold : int or float
+        Watts
+    min_off_duration : int
+        If min_off_duration > 0 then ignore 'off' periods less than
+        min_off_duration seconds of sub-threshold power consumption
+        (e.g. a washing machine might draw no power for a short
+        period while the clothes soak.)  Defaults to 0.
+    min_on_duration : int
+        Any activation lasting less seconds than min_on_duration will be
+        ignored.  Defaults to 0.
+
+    Returns
+    -------
+    numpy.array,  the chunk's on, off states
+
+    """
+    
+    when_on = chunk > on_power_threshold
+    
+    state_changes = np.diff(when_on)
+    idx, = state_changes.nonzero() 
+
+    # We need to start after the change in "when_on". Therefore, 
     # we'll shift the index by 1 to the right.
     idx += 1
 
-    if condition[0]:
-        # If the start of condition is True prepend a 0
+    if when_on[0]:
         idx = np.r_[0, idx]
 
-    if condition[-1]:
-        # If the end of condition is True, append the length of the array
-        idx = np.r_[idx, condition.size] # Edit
+    if when_on[-1]:
+        idx = np.r_[idx, condition.size]
 
-    # Reshape the result into two columns - this creates each consecutive index to be on the other side
     
     idx.shape = (-1,2)
     
-    on_events = idx[:,0].copy()
-    off_events = idx[:,1].copy()
+    switch_on_events = idx[:,0].copy()
+    switch_off_events = idx[:,1].copy()
     
     #checks if they are of even size 
-    assert len(on_events) == len(off_events)
+    assert len(switch_on_events) == len(switch_off_events)
 
-    if len(on_events) > 0:
-        off_duration = on_events[1:] - off_events[:-1]
+    if len(switch_on_events) > 0:
         
-        #adds 1000 to the beginning
+        off_duration = switch_on_events[1:] - switch_off_events[:-1]
         off_duration = np.insert(off_duration, 0, 1000.)
-        #keeps the indices where the off duration is less than min_off
-        on_events = on_events[off_duration > min_off]
+
+        switch_on_events = switch_on_events[off_duration > min_off_duration]
+        switch_off_events = switch_off_events[np.roll(off_duration, -1) > min_off_duration]
         
-        #places the 1000 as the last element in off_duration
-        off_events = off_events[np.roll(off_duration, -1) > min_off]
-        assert len(on_events) == len(off_events)
+        assert len(switch_on_events) == len(switch_off_events)
 
-        on_duration = off_events - on_events
-        on_events = on_events[on_duration > min_on]
-        off_events = off_events[on_duration > min_on]
+        on_duration = switch_off_events - switch_on_events
+        switch_on_events = switch_on_events[on_duration > min_on_duration]
+        switch_off_events = switch_off_events[on_duration > min_on_duration]
 
-    s = app.copy()
-    #s.iloc[:] = 0.
+    s = chunk.copy()
     s[:] = 0.
 
-    for on, off in zip(on_events, off_events):
-        #s.iloc[on:off] = 1.
+    for on, off in zip(switch_on_events, switch_off_events):
         s[on:off] = 1.
     
     return s                                

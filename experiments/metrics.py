@@ -4,37 +4,39 @@ import seaborn as sns
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, matthews_corrcoef, confusion_matrix, roc_curve
-
-mpl.rcParams['figure.figsize'] = (12, 10)
-colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, matthews_corrcoef 
+from sklearn.metrics import confusion_matrix, roc_curve
 
 METRICS = {"Accuracy" : accuracy_score, 
            "Precision" : precision_score, 
            "Recall" : recall_score, 
            "F1 Score" : f1_score, 
-           "MCC" : matthews_corrcoef
-          }
+           "MCC" : matthews_corrcoef}
+
+
+
+mpl.rcParams['figure.figsize'] = (12, 10)
+colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
 
 
 def multilabelify(metric, y_true, y_predicted, mode="target"):
-    """
-    Return per label results of a scikit-learn compatible quality measure
+    
+    """Returns per label or averaged results of a scikit-learn compatible quality metric.
 
     Parameters
     ----------
-    measure : callable scikit-compatible quality metric function
-    y_true : numpy array ,ground truth
-    y_predicted : numpy array, the predicted result
+    metric : callable scikit-compatible quality metric function
+    y_true : numpy.array, ground truth
+    y_predicted : numpy.array, the predicted result
+    mode: str, either "target" or "averaged"
 
     Returns
     -------
-    List[int or float] , scores from a given metric
+    List[int or float], scores from a given metric
 
     """
     
     if mode == "target":
-    
         return [ metric(y_true[:, i], y_predicted[:, i]) for i in range(y_true.shape[1]) ]
     
     elif mode == "averaged":
@@ -43,15 +45,18 @@ def multilabelify(metric, y_true, y_predicted, mode="target"):
         return None
     
     
-def test_plot_loss(history, label, n):
-    # Use a log scale on y-axis to show the wide range of values.
-    plt.semilogy(history.epoch, history.history['loss'],color=colors[n], label='Train ' + label)
-    plt.semilogy(history.epoch, history.history['val_loss'],color=colors[n], label='Val ' + label,linestyle ="--")
-    plt.xlabel('Epoch')
-    plt.ylabel('Loss')
-    
-    
 def validation_report(history):
+    
+    """Creates a report on training and validation losses and metrics at successive epochs.
+
+    Parameters
+    ----------
+    history : tf.keras.callback.History, its History.history attribute is a record of training 
+              loss values and metrics values at successive epochs, as well as validation loss values 
+              and validation metrics values (if applicable).
+
+    """
+    
     
     metrics = [k for k in history.history.keys() if "val" not in k]
     
@@ -75,7 +80,20 @@ def validation_report(history):
     
 def evaluation_report(y_true, y_predicted, targets=None, metrics=METRICS, mode="target"):
     
+    """Creates a report on a set of metrics to evaluate the classifier's performance. 
 
+    Parameters
+    ----------
+    y_true : numpy.array, ground truth
+    y_predicted : numpy.array, the predicted result
+    mode: str, either "target" or "averaged"
+    
+    Returns
+    -------
+    pandas.DataFrame, a dataframe with the specified metric scores
+
+    """
+    
     if mode == "target": 
         
         results = {}
@@ -89,6 +107,7 @@ def evaluation_report(y_true, y_predicted, targets=None, metrics=METRICS, mode="
     elif mode == "averaged":
         
         keys = ['Precision', 'Recall','F1 Score']
+        
         avg_metrics = {key: metrics[key] for key in keys}
 
         results = {}
@@ -104,6 +123,16 @@ def evaluation_report(y_true, y_predicted, targets=None, metrics=METRICS, mode="
 
     
 def confusion_matrix_report(y_true, y_predicted, targets):  
+    
+    """Creates the corresponding confusion matrices for all targets. 
+
+    Parameters
+    ----------
+    y_true : numpy.array, ground truth
+    y_predicted : numpy.array, the predicted result
+    targets: str, target name
+
+    """
     
     results = multilabelify(confusion_matrix, y_true, y_predicted, mode="target")
     
@@ -121,6 +150,16 @@ def confusion_matrix_report(y_true, y_predicted, targets):
         
 
 def roc_report(y_true, y_predicted, targets): 
+    
+    """Creates the corresponding roc curves for all targets. 
+
+    Parameters
+    ----------
+    y_true : numpy.array, ground truth
+    y_predicted : numpy.array, the predicted result
+    targets: str, target name
+
+    """
     
     results = multilabelify(roc_curve, y_true, y_predicted, mode="target")
     
