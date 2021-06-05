@@ -132,5 +132,9 @@ dmypy.json
 .DS_Store
 
 results/*
+!results/.gitkeep 
 data/data/*
+!data/data/.gitkeep 
 experiments/pretrained_models/*
+!experiments/pretrained_models/.gitkeep 
+
