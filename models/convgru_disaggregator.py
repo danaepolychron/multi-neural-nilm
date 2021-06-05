@@ -44,8 +44,8 @@ class BiGRU(nn.Module):
         
         output, _ = self.gru(x,h0)
         
-        # keeps the 1st point of the output sequence
-        output = output[:, 0, :]
+        # keeps the lst point of the output sequence
+        output = output[:, -1, :]
         
         return output
     
@@ -69,7 +69,9 @@ class ConvGRU(nn.Module):
         applies a bidirectional 2-layer gated recurrent unit (GRU) RNN to the input sequence
     dense : torch.nn.Linear 
         applies a linear transformation to the input data
-   
+    activation : torch.nn.Linear 
+        applies a linear transformation to the input data
+
     """
 
     def __init__(self, in_channels=1, out_channels=3):
@@ -80,7 +82,8 @@ class ConvGRU(nn.Module):
         self.kernel_size = 4
         self.conv = nn.Conv1d(in_channels=in_channels, out_channels=16, kernel_size=4, padding=0, stride=1, bias=False)
         self.bigru = BiGRU(input_size=16, hidden_size=64, num_layers=2)
-        self.dense = nn.Linear(in_features=128, out_features=out_channels, bias=False)
+        self.dense = nn.Linear(in_features=128, out_features=128, bias=False)
+        self.activation = nn.Linear(in_features=128, out_features=out_channels, bias=False)
 
         
     def forward(self, x):
@@ -97,9 +100,9 @@ class ConvGRU(nn.Module):
         conv = self.conv(x).permute(0,2,1)
         
         gru = self.bigru(conv)
-        dense = self.dense(gru)
         
-        output = torch.tanh(dense)
+        dense = torch.tanh(self.dense(gru))
+        output = self.activation(dense)
         
         return output
 

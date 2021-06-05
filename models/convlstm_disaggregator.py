@@ -43,9 +43,9 @@ class BiLSTM(nn.Module):
         h0 = torch.zeros(self.num_layers*2, x.size(0), self.hidden_size).to(device)
         c0 = torch.zeros(self.num_layers*2, x.size(0), self.hidden_size).to(device)
         
-        # keeps the 1st point of the output sequence
+        # keeps the last point of the output sequence
         output, _ = self.lstm(x,(h0,c0))
-        output = output[:, 0, :]
+        output = output[:, -1, :]
         
         return output
     
@@ -69,6 +69,8 @@ class ConvLSTM(nn.Module):
         applies a bidirectional 2-layer long short-term memory (LSTM) RNN to the input sequence
     dense : torch.nn.Linear 
         applies a linear transformation to the input data
+    activation : torch.nn.Linear 
+        applies a linear transformation to the input data
    
     """
 
@@ -80,7 +82,8 @@ class ConvLSTM(nn.Module):
         self.kernel_size = 4
         self.conv = nn.Conv1d(in_channels=in_channels, out_channels=16, kernel_size=4, padding=0, stride=1, bias=False)
         self.bilstm = BiLSTM(input_size=16, hidden_size=64, num_layers=2)
-        self.dense = nn.Linear(in_features=128, out_features=out_channels, bias=False)
+        self.dense = nn.Linear(in_features=128, out_features=128, bias=False)
+        self.activation = nn.Linear(in_features=128, out_features=out_channels, bias=False)
 
         
     def forward(self, x):
@@ -96,9 +99,9 @@ class ConvLSTM(nn.Module):
         #the output is reshaped to (batch, features, sequence) to enter the GRU layer
         conv = self.conv(x).permute(0,2,1)
         lstm = self.bilstm(conv)
-        dense = self.dense(lstm)
         
-        output = torch.tanh(dense)
+        dense = torch.tanh(self.dense(lstm))
+        output = self.activation(dense)
         
         return output
     

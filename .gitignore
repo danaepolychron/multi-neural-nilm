@@ -130,3 +130,7 @@ dmypy.json
 
 # For mac
 .DS_Store
+
+results/*
+data/data/*
+experiments/pretrained_models/*

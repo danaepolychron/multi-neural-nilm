@@ -103,7 +103,7 @@ class Seq2Point(data.Dataset):
         self.train = train
         self.speed = speed
         
-        self.samples = len(self.mains) // self.speed  #to minimise fit time
+        self.samples = (len(self.mains) - self.length) // self.speed  #to minimise fit time
      
     
     def __getitem__(self, index):

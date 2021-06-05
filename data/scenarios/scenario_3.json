@@ -6,7 +6,7 @@
     "train_buildings": [1,2],
     "test_buildings": [5],
     "train_windows": [["2013-04-12","2013-06-05"],["2013-04-16","2013-06-15"]],
-    "test_windows": [["2014-07-14","2014-08-10"]],
+    "test_windows": [["2014-06-29","2014-08-15"]],
     "sample_period" : 60,
     "targets" : { 
         "fridge": [0, 1, 50],  

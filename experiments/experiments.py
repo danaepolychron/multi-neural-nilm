@@ -135,11 +135,16 @@ class Experiment(object):
         self.lrn_rate = lrn_rate
         self.batch_size = batch_size
         self.speed = speed
-        self.appliances = self.get_appliances()
-        
+        #self.appliances = self.get_appliances()
+        self.appliances = { 
+            "fridge": [0, 1, 50],  
+            "dish washer" : [3, 30, 10],
+            "washer dryer" : [30, 30, 20]
+        }
+
         
     
-    def train(self, train_generator, valid_generator, filename):
+    def train(self, train_generator, valid_generator, test_generator, filename):
         
         """Trains the model on the specified target appliances.
         
@@ -147,6 +152,7 @@ class Experiment(object):
         ----------
         train_generator : torch.utils.data.DataLoader, iterable with the training samples and corresponding labels
         valid_generator : torch.utils.data.DataLoader, iterable with the validation samples and corresponding labels
+        test_generator : torch.utils.data.DataLoader, iterable with the testing samples and corresponding labels
         filename : str, the path where the model's checkpoints are saved
 
         Returns
@@ -157,9 +163,11 @@ class Experiment(object):
         
         train_losses = []
         valid_losses = [] 
+        test_losses = [] 
         
         avg_train_losses = []
         avg_valid_losses = []
+        avg_test_losses = [] 
 
         min_loss = np.inf
 
@@ -203,23 +211,43 @@ class Experiment(object):
                 loss = criterion(output, y)
                 valid_losses.append(loss.item())
             
+            
+            self.model.eval()
+            
+            for X, y in test_generator:
+                
+                X = X.unsqueeze(1).to(device)
+                y = y.to(device)
+                
+                if self.model.is_autoencoder(): 
+                    output = self.model(X).permute(0,2,1)
+                else:
+                    output = self.model(X)
+       
+                loss = criterion(output, y)
+                test_losses.append(loss.item())
+            
 
             train_loss = np.average(train_losses)
             valid_loss = np.average(valid_losses)
+            test_loss = np.average(test_losses)
             
             
             avg_train_losses.append(train_loss)
             avg_valid_losses.append(valid_loss)
+            avg_test_losses.append(test_loss)
 
             epoch_len = len(str(self.epochs))
             epoch_msg = (f'[{epoch:>{epoch_len}}/{self.epochs:>{epoch_len}}] ' +
                          f'train_loss: {train_loss:.5f} ' +
-                         f'valid_loss: {valid_loss:.5f} ')
+                         f'valid_loss: {valid_loss:.5f} ' +
+                         f'test_loss: {test_loss:.5f} ')
 
             print(epoch_msg)
 
             train_losses = []
             valid_losses = []
+            test_losses = []
 
             if valid_loss < min_loss:
                 print(f'Validation loss decreased ({min_loss:.6f} --> {valid_loss:.6f}).')
@@ -285,13 +313,14 @@ class Experiment(object):
                 layer.reset_parameters()
             
             
-    def crossvalidate(self, dataset, n_splits=5):
+    def crossvalidate(self, train_dataset, test_dataset, n_splits=5):
         
         """Applies cross validation.
         
         Parameters
         ----------
-        dataset : torch.utils.data.DataSet, contains the testing samples and corresponding labels
+        train_dataset : torch.utils.data.DataSet, contains the training samples and corresponding labels
+        test_dataset : torch.utils.data.DataSet, contains the testing samples and corresponding labels
         n_splits : int, number of folds. Must be at least 2.
 
         Returns
@@ -309,27 +338,30 @@ class Experiment(object):
         directory = os.path.join(PRETRAINED, "{}".format(self.model.name))
         if not os.path.exists(directory):
             os.makedirs(directory)
+        
+        test_generator = DataLoader(test_dataset, batch_size=self.batch_size, shuffle=False)
 
-        for fold, (train_index, test_index) in enumerate(kfold.split(dataset)):
+        
+        for fold, (train_index, valid_index) in enumerate(kfold.split(train_dataset)):
             
             print("Training {} for fold {} ...".format(self.model.name, fold+1))
 
 
-            train_generator = DataLoader(dataset, 
+            train_generator = DataLoader(train_dataset, 
                                          batch_size=self.batch_size, 
                                          shuffle=False, 
                                          sampler=SubsetRandomSampler(train_index))
-            test_generator = DataLoader(dataset, 
+            valid_generator = DataLoader(train_dataset, 
                                         batch_size=self.batch_size, 
                                         shuffle=False,
-                                        sampler=SubsetRandomSampler(test_index))
+                                        sampler=SubsetRandomSampler(valid_index))
 
             # reset model weights
             self.model.apply(self.reset_weights)
           
 
             filename = os.path.join(directory, "scenario-{}-{}-min-checkpoint-{}.pth".format(self.scenario, self.window, fold))
-            train_loss, test_loss = self.train(train_generator, test_generator, filename)
+            train_loss, valid_loss = self.train(train_generator, valid_generator, test_generator, filename)
   
             
             print("Saving evaluation results for fold {} ...".format(fold+1))
@@ -411,9 +443,9 @@ class Experiment(object):
             ds_test = Seq2Point(mains=test[MAINS], meters=test[APPLIANCES], length=self.window, speed=self.speed, train=False)
         
       
-        ds_merged = ConcatDataset([ds_train, ds_test])
+        #ds_merged = ConcatDataset([ds_train, ds_test])
         
-        results = self.crossvalidate(dataset=ds_merged, n_splits=cv)
+        results = self.crossvalidate(train_dataset=ds_train, test_dataset=ds_test, n_splits=cv)
         
         self.save_experiment_results(results["target_results"], results["model_results"]) 
         
