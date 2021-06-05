@@ -257,7 +257,7 @@ class Experiment(object):
                 
         torch.save(self.model.state_dict(), filename)
 
-        return  avg_train_losses, avg_valid_losses
+        return  avg_train_losses, avg_valid_losses, avg_test_losses
         
     
     def test(self, generator, appliance, filename):
@@ -361,7 +361,7 @@ class Experiment(object):
           
 
             filename = os.path.join(directory, "scenario-{}-{}-min-checkpoint-{}.pth".format(self.scenario, self.window, fold))
-            train_loss, valid_loss = self.train(train_generator, valid_generator, test_generator, filename)
+            train_loss, valid_loss, test_loss = self.train(train_generator, valid_generator, test_generator, filename)
   
             
             print("Saving evaluation results for fold {} ...".format(fold+1))
